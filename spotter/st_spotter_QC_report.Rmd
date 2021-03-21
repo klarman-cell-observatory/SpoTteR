@@ -1,0 +1,121 @@
+---
+title: "SpoTteR"
+output: html_document
+params:
+  date: !r Sys.Date()
+  time: !r Sys.time()
+---
+
+```{r setup, include=FALSE}
+knitr::opts_template$set(squarefigure = list(fig.height = 6, fig.width = 6))
+library(magick)
+library(pdftools)
+library(stringr)
+library(knitr)
+library(kableExtra)
+
+#2do list
+# add date exp 
+# add first line from alignemnt script 
+
+```
+
+```{r sample names, message=FALSE, warning=FALSE, paged.print=FALSE, echo = FALSE}
+# Expect command line args at the end 
+args = commandArgs(trailingOnly = TRUE)
+qc_plot_folder = args[1]
+full_names = args[2]
+```
+### Report for ST library: `r paste(full_names)`
+    --- report was generated on `r  paste(params$date,format(params$time, "at %X"), sep =" ")`
+    
+```{r, make_df_pipe_log, echo =FALSE}
+# Make a df to collect data
+read.pipe.log = function(pipe_log_file){
+
+  # pipe_log_file = paste0(pipeline_logs_folder, "/", array, cn,"_",cde, "_log.txt")
+
+  # reads in log file
+  log_file <- read.delim(pipe_log_file, sep="\t",quote="",row.names = 1, header = F )
+  
+  merged.file = cbind(
+    # sapply(strsplit(grep(pattern = "fastq.gz", x = row.names(log_file), value =T), " "),"[[",4)[1],
+    sapply(strsplit(grep(pattern = "INFO:STPipeline:ST Pipeline", x = row.names(log_file), value =T), " "),"[[",3),
+    # sapply(strsplit(grep(pattern = "INFO:STPipeline:Reference mapping STAR index folder", x = row.names(log_file), value =T), ": "),"[[",2),
+    # sapply(strsplit(grep(pattern = "INFO:STPipeline:Reference annotation file", x = row.names(log_file), value =T), ": "),"[[",2),
+    sapply(strsplit(grep(pattern = "INFO:STPipeline:Trimming stats total reads", x = row.names(log_file), value =T), ": "),"[[",2),
+    sapply(strsplit(sapply(strsplit(grep(pattern = "INFO:STPipeline:Trimming stats you just lost about", x = row.names(log_file), value =T), " "),"[[",7),"%", ),"[[",1),
+    sapply(strsplit(row.names(log_file[(which(row.names(log_file) == grep(pattern = "Uniquely mapped reads %", x = row.names(log_file), value =T)) +1),]),"%", ),"[[",1),
+    # sapply(strsplit(row.names(log_file[(which(row.names(log_file) == grep(pattern = "of reads mapped to multiple loci", x = row.names(log_file), value =T)) +1),]),"%", ),"[[",1),
+    sapply(strsplit(grep(pattern = "INFO:STPipeline:Annotated reads", x = row.names(log_file), value =T), ": "),"[[",2),
+    sapply(strsplit(grep(pattern = "INFO:STPipeline:Number of unique molecules present", x = row.names(log_file), value =T), ": "),"[[",2),
+    sapply(strsplit(grep(pattern = "INFO:STPipeline:Number of unique genes present", x = row.names(log_file), value =T), ": "),"[[",2)
+  )
+  
+  #make one file
+  merged.file=cbind(merged.file, round(100*(1-as.numeric(merged.file[,6])/as.numeric(merged.file[,5])), digits = 2))
+  colnames(merged.file) = c("ST Pipeline version", "Raw input reads", "Trimming loss[%]", "Unique Mapping[%]", "Annotated reads", "UMIs", "Genes", "Library saturation[%]")
+  
+  #return file
+  return(merged.file)
+  
+  }
+```
+
+    
+### This shows library stats from your sequencing run:
+```{r, pipeline stats, echo=FALSE}
+pipeline_logs_folder=paste0(str_remove(dirname(qc_plot_folder), "output"), "pipeline_logs")
+array=sapply(str_split(full_names, pattern = "_"),"[[",1)
+cn=sapply(str_split(full_names, pattern = "_"),"[[",2)
+cde=sapply(str_split(full_names, pattern = "_"),"[[",3)
+df=read.pipe.log(paste0(pipeline_logs_folder, "/", array, cn,"_",cde, "_log.txt"))
+kable(df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "left") %>% row_spec(0, bold = T, align = "c") %>% row_spec(1, align = "c")
+```
+
+## This renders the QC plot. Plot shows: 
+    --- HE Tissue Image
+    --- Heatmap of log2(raw expression) associated with all 1007 ST barcodes
+    --- Heatmap of log2(raw expression) associated with ST barcodes under tissue
+    
+```{r plot QC, echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%',fig.asp=0.25}
+qc_img<- image_read_pdf(paste0(qc_plot_folder,"/","ST_Report_", full_names, ".pdf"))
+par(mar=c(0,0,0,0))
+plot(qc_img)
+```
+
+## This renders the Violin QC plot. Plot shows: 
+    --- UMIs outside or within tissue-detected boundaries
+    --- Genes outside or within tissue-detected boundaries
+```{r plot QC-Violin, echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%', fig.asp=0.33}
+qc_img<- image_read_pdf(paste0(qc_plot_folder,"/","ST_Report_Violins_", full_names, ".pdf"))
+par(mar=c(0,0,0,0))
+plot(qc_img)
+```
+
+### This prints out a styled report on UMI stats: 
+```{r, qc stats, echo=FALSE}
+qc_log <- read.delim(paste0(dirname(qc_plot_folder), "/", "QC_logs/", full_names, "_QC_data.txt"), sep="\t", header = F, row.names = 1)
+df=data.frame(qc_log)
+colnames(df) = NULL 
+kable(df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+## This renders the Top Detected Genes QC plot. Plot shows: 
+   --- Heatmap of log2(raw expression) associated with top 5 genes in your ST experiment
+```{r plot QC-Top-Genes, echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%', fig.asp=0.25}
+qc_img<- image_read_pdf(paste0(qc_plot_folder,"/","ST_Report_Top_Genes_", full_names, ".pdf"))
+par(mar=c(0,0,0,0))
+plot(qc_img)
+```
+
+## This renders the Interesting Genes QC plot. User defines interesting genes during SpoTter processing. Plot shows: 
+    --- Heatmap of log2(raw expression) associated with 8 interesting genes in your ST experiment
+    --- in case you did not select any genes, genes were picked at random from the dataset 
+```{r plot QC-Interesting-Genes, echo=FALSE, message=FALSE, warning=FALSE, out.width = '100%', fig.asp=0.25}
+qc_img<- image_read_pdf(paste0(qc_plot_folder,"/","ST_Report_Interesting_Genes_", full_names, ".pdf"))
+par(mar=c(0,0,0,0))
+plot(qc_img)
+```
