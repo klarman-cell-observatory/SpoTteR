@@ -57,8 +57,8 @@ pipeline_log: 10005CN48_C1_log.txt
 
 Please note that are parameters that should be set in the st_spotter_RUN.R file prior to running SpoTteR:
 - number or rows and columns expected in the array matrix needs to be designated according to array version
-- optional: if there is substantial background in the red channel, the option pink==True should be envoked
-- optional: if there are bubbles present, the option bubble==True should be envoked
+- optional: if there is substantial background in the red channel, the option pink==True should be invoked
+- optional: if there are bubbles present, the option bubble==True should be invoked
 
 ### Expected QC report
 Please find example QC report generated with SpoTteR [here](./spotter/data/ST_QC_Report_10005_CN48_C1.html). 
